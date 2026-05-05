@@ -11,6 +11,8 @@ import { taskService } from '@/src/services/taskService';
 import { Loader2, Flame } from 'lucide-react';
 import { motion } from 'motion/react';
 
+import { toast } from 'sonner';
+
 export default function App() {
   const [session, setSession] = useState<any>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
@@ -20,6 +22,7 @@ export default function App() {
   const [tasks, setTasks] = useState<PostgrestTask[]>([]);
 
   const [initError, setInitError] = useState<string | null>(null);
+  const [hasNotified, setHasNotified] = useState(false);
 
   /**
    * Fetches the user profile from the public.users table.
@@ -43,6 +46,8 @@ export default function App() {
    * Primary authentication and system initialization logic.
    */
   useEffect(() => {
+    let subscription: any;
+
     const initAuth = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
@@ -50,9 +55,20 @@ export default function App() {
         if (session?.user) {
           await fetchUserProfile(session.user.id);
         }
+
+        // Listen for auth state transitions (Sign In / Out)
+        const { data } = supabase.auth.onAuthStateChange(async (_event, session) => {
+          setSession(session);
+          if (session?.user) {
+            await fetchUserProfile(session.user.id);
+          } else {
+            setUserProfile(null);
+          }
+        });
+        subscription = data.subscription;
       } catch (err: any) {
         console.error('[App] Auth init error:', err);
-        setInitError(err.message);
+        setInitError(err.message || 'Failed to initialize Supabase. Please check your environment variables.');
       } finally {
         setLoading(false);
       }
@@ -60,17 +76,9 @@ export default function App() {
 
     initAuth();
 
-    // Listen for auth state transitions (Sign In / Out)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setSession(session);
-      if (session?.user) {
-        await fetchUserProfile(session.user.id);
-      } else {
-        setUserProfile(null);
-      }
-    });
-
-    return () => subscription?.unsubscribe();
+    return () => {
+      if (subscription) subscription.unsubscribe();
+    };
   }, []);
 
   /**
@@ -79,12 +87,92 @@ export default function App() {
   const fetchTasks = async (silent = false) => {
     if (!silent) setLoadingTasks(true);
     try {
-      const data = await taskService.getTasks();
+      const data = await taskService.readAll();
       setTasks(data);
     } catch (error) {
       console.error('[App] Task fetch error:', error);
     } finally {
       if (!silent) setLoadingTasks(false);
+    }
+  };
+
+  /**
+   * Centralized deletion with optimistic state projection.
+   */
+  const deleteTask = async (id: string) => {
+    const previousTasks = [...tasks];
+    setTasks(current => current.filter(t => t.id !== id));
+
+    try {
+      await taskService.delete(id);
+    } catch (error) {
+      console.error('[App] Strategic erasure failure:', error);
+      setTasks(previousTasks); // Tactical rollback
+      throw error;
+    }
+  };
+
+  /**
+   * Optimistic status transition with state reconciliation.
+   */
+  const updateTaskStatus = async (id: string, newStatus: any) => {
+    const previousTasks = [...tasks];
+    setTasks(current => current.map(t => 
+      t.id === id ? { ...t, status: newStatus, completed_at: newStatus === 'completed' ? new Date().toISOString() : t.completed_at } : t
+    ));
+
+    try {
+      await taskService.updateStatus(id, newStatus);
+    } catch (error) {
+      console.error('[App] Status synchronization failure:', error);
+      setTasks(previousTasks); // Tactical rollback
+      toast.error('Strategic Status Update Failed', {
+        description: 'Communication link with grid lost. Reverting sequence.'
+      });
+    }
+  };
+
+  /**
+   * Optimistic task creation logic.
+   */
+  const createTask = async (payload: any) => {
+    // Generate a temporary ID for optimistic rendering
+    const tempId = `temp-${Date.now()}`;
+    const optimisticTask: any = {
+      id: tempId,
+      ...payload,
+      status: 'pending',
+      created_at: new Date().toISOString(),
+      user_id: session.user.id
+    };
+
+    setTasks(prev => [optimisticTask, ...prev]);
+
+    try {
+      await taskService.create(payload);
+      // fetchTasks(true); // Subscription will sync the real ID
+    } catch (error) {
+      console.error('[App] Creation sync failure:', error);
+      setTasks(prev => prev.filter(t => t.id !== tempId));
+      throw error;
+    }
+  };
+
+  /**
+   * Optimistic task modification logic.
+   */
+  const updateTask = async (id: string, payload: any) => {
+    const previousTasks = [...tasks];
+    setTasks(current => current.map(t => 
+      t.id === id ? { ...t, ...payload } : t
+    ));
+
+    try {
+      await taskService.update(id, payload);
+    } catch (error) {
+      console.error('[App] Strategic update failure:', error);
+      setTasks(previousTasks);
+      throw error;
     }
   };
 
@@ -108,8 +196,22 @@ export default function App() {
           },
           (payload) => {
             console.log('[App] Real-time tactical update:', payload);
-            // Silent refresh to avoid jarring UI flickers during background updates
-            fetchTasks(true);
+            
+            if (payload.eventType === 'INSERT') {
+              setTasks(prev => {
+                // Prevent duplicate if optimistic UI already added it 
+                // Note: optimistic ID might be 'temp-xxx', real ID is UUID
+                // Simple way: check if same title/desc exists or just let fetchTasks handle it if it was optimistic
+                // Better: If we have an optimistic task, we should replace it. 
+                // But we don't know which one. 
+                // For now, full refresh is safer for inserts, but let's optimize UPDATE and DELETE
+                return [payload.new as PostgrestTask, ...prev.filter(t => !t.id.startsWith('temp-'))];
+              });
+            } else if (payload.eventType === 'UPDATE') {
+              setTasks(prev => prev.map(t => t.id === payload.new.id ? { ...t, ...payload.new } : t));
+            } else if (payload.eventType === 'DELETE') {
+              setTasks(prev => prev.filter(t => t.id !== payload.old.id));
+            }
           }
         )
         .subscribe();
@@ -119,6 +221,28 @@ export default function App() {
       };
     }
   }, [session]);
+
+  /**
+   * Proactive Deadline Monitoring.
+   * Fires alerts if mission-critical deadlines are imminent on operational boot.
+   */
+  useEffect(() => {
+    if (session && tasks.length > 0 && !hasNotified && !loadingTasks) {
+      const todayCount = tasks.filter(t => 
+        t.status !== 'completed' && 
+        t.due_date && 
+        new Date(t.due_date).toDateString() === new Date().toDateString()
+      ).length;
+
+      if (todayCount > 0) {
+        toast.error(`OPERATIONAL WARNING: ${todayCount} Strategic ${todayCount === 1 ? 'Deadline' : 'Deadlines'} Active Today`, {
+          description: "Immediate action required for priority synchronization.",
+          duration: 8000,
+        });
+      }
+      setHasNotified(true);
+    }
+  }, [tasks, session, hasNotified, loadingTasks]);
 
   const renderActiveTab = () => {
     if (loadingTasks && tasks.length === 0) {
@@ -130,9 +254,24 @@ export default function App() {
       case 'dashboard':
         return <Dashboard tasks={tasks} profile={userProfile} />;
       case 'tasks':
-        return <TaskList tasks={tasks.filter(t => t.status !== 'Completed')} onRefresh={() => fetchTasks(true)} />;
+        return (
+          <TaskList 
+            tasks={tasks.filter(t => t.status !== 'completed')} 
+            onRefresh={() => fetchTasks(true)} 
+            onDelete={deleteTask}
+            onCreate={createTask}
+            onUpdate={updateTask}
+            onUpdateStatus={updateTaskStatus}
+          />
+        );
       case 'history':
-        return <History tasks={tasks.filter(t => t.status === 'Completed')} onRefresh={() => fetchTasks(true)} />;
+        return (
+          <History 
+            tasks={tasks.filter(t => t.status === 'completed')} 
+            onRefresh={() => fetchTasks(true)} 
+            onUpdateStatus={updateTaskStatus}
+          />
+        );
       default:
         return null;
     }
@@ -243,7 +382,7 @@ function SecretItem({ label, value, desc }: { label: string, value: string, desc
   }
 
   return (
-    <Layout activeTab={activeTab} setActiveTab={setActiveTab} profile={userProfile}>
+    <Layout activeTab={activeTab} setActiveTab={setActiveTab} profile={userProfile} tasks={tasks}>
       {renderActiveTab()}
     </Layout>
   );

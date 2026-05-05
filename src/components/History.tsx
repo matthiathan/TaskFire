@@ -1,27 +1,34 @@
 import { useState, useMemo } from 'react';
-import { PostgrestTask, Priority } from '@/src/types';
+import { PostgrestTask, Priority, Status } from '@/src/types';
 import { 
   Search, 
   Filter, 
   ArrowUpDown,
-  Archive
+  Archive,
+  Trash2,
+  Loader2,
+  RefreshCw
 } from 'lucide-react';
 import { cn, formatDate } from '@/src/lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
+import { toast } from 'sonner';
+import { taskService } from '@/src/services/taskService';
 
 interface HistoryProps {
   tasks: PostgrestTask[];
   onRefresh: () => void;
+  onUpdateStatus: (id: string, newStatus: Status) => Promise<void>;
 }
 
 /**
  * History provides an audited view of all completed tactical operations.
  * It includes advanced filtering and strategic sorting capabilities.
  */
-export default function History({ tasks, onRefresh }: HistoryProps) {
+export default function History({ tasks, onRefresh, onUpdateStatus }: HistoryProps) {
   const [search, setSearch] = useState('');
   const [priorityFilter, setPriorityFilter] = useState<Priority | 'All'>('All');
   const [dateSort, setDateSort] = useState<'desc' | 'asc'>('desc');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // Strategic data transformation
   const filteredTasks = useMemo(() => {
@@ -38,6 +45,41 @@ export default function History({ tasks, onRefresh }: HistoryProps) {
         return dateSort === 'desc' ? dateB - dateA : dateA - dateB;
       });
   }, [tasks, search, priorityFilter, dateSort]);
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('CONFIRM OPERATIONAL ERASURE: Are you sure you want to permanently delete this archived task from the database?')) return;
+    
+    setDeletingId(id);
+    const promise = taskService.delete(id);
+    
+    toast.promise(promise, {
+      loading: 'PURGING ARCHIVE...',
+      success: () => {
+        onRefresh();
+        return 'ARCHIVE ENTITY PURGED';
+      },
+      error: (err: any) => `PURGE FAILURE: ${err.message || 'System rejection'}`
+    });
+
+    try {
+      await promise;
+    } catch (err) {
+      console.error('[History] Delete error:', err);
+      toast.error('System Rejection', {
+        description: 'Permanent archive removal failed. Check connection.'
+      });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleReactivate = async (id: string) => {
+    toast.promise(onUpdateStatus(id, 'pending'), {
+      loading: 'REACTIVATING OPERATION...',
+      success: 'ENTITY RESTORED TO ACTIVE STREAM',
+      error: 'REACTIVATION FAILURE'
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -63,9 +105,9 @@ export default function History({ tasks, onRefresh }: HistoryProps) {
               className="bg-transparent text-[10px] border-none outline-none text-slate-400 font-black uppercase tracking-widest cursor-pointer w-full"
             >
               <option value="All" className="bg-[#0F0F0F]">Alpha All</option>
-              <option value="High" className="bg-[#0F0F0F]">High Red</option>
-              <option value="Medium" className="bg-[#0F0F0F]">Medium Blue</option>
-              <option value="Low" className="bg-[#0F0F0F]">Low Gray</option>
+              <option value="high" className="bg-[#0F0F0F]">High Red</option>
+              <option value="medium" className="bg-[#0F0F0F]">Medium Blue</option>
+              <option value="low" className="bg-[#0F0F0F]">Low Gray</option>
             </select>
           </div>
 
@@ -93,6 +135,7 @@ export default function History({ tasks, onRefresh }: HistoryProps) {
                 <th className="px-6 py-5 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Rank</th>
                 <th className="px-6 py-5 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Deployment</th>
                 <th className="px-6 py-5 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Resolution</th>
+                <th className="px-6 py-5 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
@@ -123,11 +166,11 @@ export default function History({ tasks, onRefresh }: HistoryProps) {
                       <td className="px-6 py-6">
                         <span className={cn(
                           "px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest border",
-                           task.priority === 'High' ? "bg-red-500/10 text-red-400 border-red-500/20" :
-                           task.priority === 'Medium' ? "bg-blue-500/10 text-blue-400 border-blue-500/20" :
+                           task.priority === 'high' ? "bg-red-500/10 text-red-400 border-red-500/20" :
+                           task.priority === 'medium' ? "bg-blue-500/10 text-blue-400 border-blue-500/20" :
                            "bg-white/5 text-slate-500 border-white/10"
                         )}>
-                          {task.priority}
+                          {task.priority === 'low' ? 'Low' : task.priority === 'medium' ? 'Medium' : 'High'}
                         </span>
                       </td>
                       <td className="px-6 py-6 text-xs text-slate-500 font-bold uppercase tracking-tight">
@@ -135,6 +178,32 @@ export default function History({ tasks, onRefresh }: HistoryProps) {
                       </td>
                       <td className="px-6 py-6 text-xs text-emerald-500 font-black uppercase tracking-tight">
                         {formatDate(task.completed_at)}
+                      </td>
+                      <td className="px-6 py-6 text-right space-x-2">
+                        <button
+                          onClick={() => handleReactivate(task.id)}
+                          className="p-2 text-slate-600 hover:text-emerald-500 hover:bg-emerald-500/10 rounded-lg transition-all"
+                          title="Reactivate Mission"
+                        >
+                          <RefreshCw className="w-4 h-4" />
+                        </button>
+                        <button 
+                          onClick={() => handleDelete(task.id)}
+                          disabled={deletingId === task.id}
+                          className={cn(
+                            "p-2 rounded-lg transition-all",
+                            deletingId === task.id 
+                              ? "text-slate-800 cursor-not-allowed" 
+                              : "text-slate-600 hover:text-red-500 hover:bg-red-500/10"
+                          )}
+                          title="Purge from Archive"
+                        >
+                          {deletingId === task.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
+                        </button>
                       </td>
                     </motion.tr>
                   ))
@@ -157,14 +226,33 @@ export default function History({ tasks, onRefresh }: HistoryProps) {
                    <div>
                       <div className="flex justify-between items-start gap-4 mb-1">
                          <h4 className="font-bold text-white text-lg leading-tight">{task.title}</h4>
-                         <span className={cn(
-                           "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border shrink-0",
-                            task.priority === 'High' ? "bg-red-500/10 text-red-400 border-red-500/20" :
-                            task.priority === 'Medium' ? "bg-blue-500/10 text-blue-400 border-blue-500/20" :
-                            "bg-white/5 text-slate-500 border-white/10"
-                         )}>
-                           {task.priority}
-                         </span>
+                         <div className="flex items-center gap-2 shrink-0">
+                           <span className={cn(
+                             "px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border",
+                              task.priority === 'high' ? "bg-red-500/10 text-red-400 border-red-500/20" :
+                              task.priority === 'medium' ? "bg-blue-500/10 text-blue-400 border-blue-500/20" :
+                              "bg-white/5 text-slate-500 border-white/10"
+                           )}>
+                             {task.priority === 'low' ? 'Low' : task.priority === 'medium' ? 'Medium' : 'High'}
+                           </span>
+                           <button 
+                             onClick={() => handleDelete(task.id)}
+                             disabled={deletingId === task.id}
+                             className={cn(
+                               "p-1 transition-colors",
+                               deletingId === task.id 
+                                 ? "text-slate-800" 
+                                 : "text-slate-500 hover:text-red-500"
+                             )}
+                             title="Permanent Erasure"
+                           >
+                             {deletingId === task.id ? (
+                               <Loader2 className="w-3 h-3 animate-spin" />
+                             ) : (
+                               <Trash2 className="w-3 h-3" />
+                             )}
+                           </button>
+                         </div>
                       </div>
                       {task.description && <p className="text-xs text-slate-500 line-clamp-2">{task.description}</p>}
                    </div>
@@ -173,9 +261,20 @@ export default function History({ tasks, onRefresh }: HistoryProps) {
                          <p className="text-slate-600 uppercase tracking-widest mb-1">Engaged</p>
                          <p className="text-slate-400 font-mono">{formatDate(task.started_at)}</p>
                       </div>
-                      <div className="text-right text-[9px] font-bold">
-                         <p className="text-slate-600 uppercase tracking-widest mb-1">Resolved</p>
-                         <p className="text-emerald-500 font-mono font-black">{formatDate(task.completed_at)}</p>
+                      <div className="flex flex-col items-end gap-2">
+                         <div className="flex gap-2">
+                            <button
+                              onClick={() => handleReactivate(task.id)}
+                              className="p-1.5 text-slate-600 hover:text-emerald-500 transition-colors"
+                              title="Reactivate"
+                            >
+                               <RefreshCw className="w-3 h-3" />
+                            </button>
+                         </div>
+                         <div className="text-right text-[9px] font-bold">
+                            <p className="text-slate-600 uppercase tracking-widest mb-1">Resolved</p>
+                            <p className="text-emerald-500 font-mono font-black">{formatDate(task.completed_at)}</p>
+                         </div>
                       </div>
                    </div>
                 </div>

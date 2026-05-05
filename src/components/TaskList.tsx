@@ -1,36 +1,41 @@
 import React, { useState } from 'react';
 import { PostgrestTask, Priority, Status } from '@/src/types';
-import { taskService } from '@/src/services/taskService';
 import { 
   Plus, 
   Search, 
   ListTodo
 } from 'lucide-react';
+import { toast } from 'sonner';
 import TaskCard from './TaskCard';
 import TaskModal from './TaskModal';
 
 interface TaskListProps {
   tasks: PostgrestTask[];
   onRefresh: () => void;
+  onDelete: (id: string) => Promise<void>;
+  onCreate: (payload: any) => Promise<void>;
+  onUpdate: (id: string, payload: any) => Promise<void>;
+  onUpdateStatus: (id: string, newStatus: Status) => Promise<void>;
 }
 
 /**
  * TaskList serves as the primary strategic view for active operations.
  * It manages the search discovery parameters and the lifecycle of task entities.
  */
-export default function TaskList({ tasks, onRefresh }: TaskListProps) {
+export default function TaskList({ tasks, onRefresh, onDelete, onCreate, onUpdate, onUpdateStatus }: TaskListProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<PostgrestTask | null>(null);
   
   // Form State
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [priority, setPriority] = useState<Priority>('Medium');
+  const [priority, setPriority] = useState<Priority>('medium');
   const [startDate, setStartDate] = useState('');
   const [dueDate, setDueDate] = useState('');
   
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Operational filtering
   const filteredTasks = tasks.filter(t => 
@@ -45,6 +50,7 @@ export default function TaskList({ tasks, onRefresh }: TaskListProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setSubmitError(null);
 
     try {
       const payload = {
@@ -56,15 +62,14 @@ export default function TaskList({ tasks, onRefresh }: TaskListProps) {
       };
 
       if (editingTask) {
-        await taskService.updateTask(editingTask.id, payload);
+        await onUpdate(editingTask.id, payload);
       } else {
-        await taskService.createTask(payload);
+        await onCreate(payload);
       }
-      onRefresh();
       closeModal();
-    } catch (err) {
+    } catch (err: any) {
       console.error('[TaskList] Submit error:', err);
-      // Future: Add toast notification here
+      setSubmitError(err.message || 'An operational failure occurred during synchronization.');
     } finally {
       setLoading(false);
     }
@@ -72,24 +77,29 @@ export default function TaskList({ tasks, onRefresh }: TaskListProps) {
 
   const updateStatus = async (id: string, newStatus: Status) => {
     try {
-      await taskService.updateStatus(id, newStatus);
-      onRefresh();
+      await onUpdateStatus(id, newStatus);
     } catch (err) {
       console.error('[TaskList] Status update error:', err);
     }
   };
 
-  const deleteTask = async (id: string) => {
-    if (!confirm('CONFIRM OPERATIONAL ERASURE: This action cannot be undone.')) return;
-    try {
-      await taskService.deleteTask(id);
-      onRefresh();
-    } catch (err) {
-      console.error('[TaskList] Delete error:', err);
-    }
+  const deleteTaskItem = async (id: string) => {
+    const promise = onDelete(id);
+    
+    toast.promise(promise, {
+      loading: 'ERASING OPERATION...',
+      success: () => {
+        onRefresh();
+        return 'OPERATION ERASED FROM GRID';
+      },
+      error: (err) => `ERASURE FAILURE: ${err.message || 'Unknown protocol error'}`
+    });
+
+    return promise;
   };
 
   const openModal = (task?: PostgrestTask) => {
+    setSubmitError(null);
     if (task) {
       setEditingTask(task);
       setTitle(task.title);
@@ -101,7 +111,7 @@ export default function TaskList({ tasks, onRefresh }: TaskListProps) {
       setEditingTask(null);
       setTitle('');
       setDescription('');
-      setPriority('Medium');
+      setPriority('medium');
       setStartDate('');
       setDueDate('');
     }
@@ -111,6 +121,7 @@ export default function TaskList({ tasks, onRefresh }: TaskListProps) {
   const closeModal = () => {
     setIsModalOpen(false);
     setEditingTask(null);
+    setSubmitError(null);
   };
 
   return (
@@ -154,7 +165,7 @@ export default function TaskList({ tasks, onRefresh }: TaskListProps) {
               idx={idx}
               onUpdateStatus={updateStatus}
               onEdit={openModal}
-              onDelete={deleteTask}
+              onDelete={deleteTaskItem}
             />
           ))
         )}
@@ -177,6 +188,7 @@ export default function TaskList({ tasks, onRefresh }: TaskListProps) {
         dueDate={dueDate}
         setDueDate={setDueDate}
         loading={loading}
+        error={submitError}
       />
     </div>
   );

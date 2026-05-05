@@ -1,97 +1,75 @@
+import { CrudService } from './CrudService';
+import { PostgrestTask, Status } from '../types';
 import { supabase } from '../lib/supabase';
-import { PostgrestTask, Priority, Status } from '../types';
 
-export const taskService = {
+/**
+ * Specialized TaskService extending the generic CRUD foundation.
+ * Implements business-specific logic for task lifecycle and timestamp tracking.
+ */
+class TaskService extends CrudService<PostgrestTask> {
+  constructor() {
+    super('tasks');
+  }
+
   /**
-   * Fetch all tasks for the logged-in user
-   * Ordered by due_date ascending, with nulls last
+   * Specialized fetch with custom ordering for task entities.
    */
-  async getTasks(): Promise<PostgrestTask[]> {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user) throw new Error('User not authenticated');
-
+  override async readAll(): Promise<PostgrestTask[]> {
+    const userId = await this.ensureAuth();
+    
     const { data, error } = await supabase
-      .from('tasks')
+      .from(this.tableName)
       .select('*')
-      .eq('user_id', session.user.id)
+      .eq('user_id', userId)
       .order('due_date', { ascending: true, nullsFirst: false });
 
     if (error) throw error;
     return data || [];
-  },
+  }
 
   /**
-   * Create a new task
+   * Specialized creation with default values for tasks.
    */
-  async createTask(task: Partial<PostgrestTask>): Promise<PostgrestTask> {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user) throw new Error('User not authenticated');
-
-    const payload = {
-      ...task,
-      user_id: session.user.id,
-      status: task.status || 'Pending',
-      priority: task.priority || 'Medium',
+  override async create(payload: Partial<PostgrestTask>): Promise<PostgrestTask> {
+    const sanitizedPayload = {
+      ...payload,
+      status: payload.status || 'pending',
+      priority: payload.priority || 'medium',
+      start_date: payload.start_date === '' ? null : payload.start_date,
+      due_date: payload.due_date === '' ? null : payload.due_date,
     };
-
-    const { data, error } = await supabase
-      .from('tasks')
-      .insert([payload])
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
-  },
+    
+    return super.create(sanitizedPayload);
+  }
 
   /**
-   * Update an existing task with timestamp logic
+   * Overridden update method to implement tactical timestamp tracking.
+   * Automatically sets started_at and completed_at based on status transitions.
    */
-  async updateTask(id: string, updates: Partial<PostgrestTask>): Promise<PostgrestTask> {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user) throw new Error('User not authenticated');
+  override async update(id: string, payload: Partial<PostgrestTask>): Promise<PostgrestTask> {
+    const finalUpdates: any = { ...payload };
 
-    const finalUpdates: any = { ...updates };
+    // Sanitize dates for Supabase compatibility
+    if (finalUpdates.start_date === '') finalUpdates.start_date = null;
+    if (finalUpdates.due_date === '') finalUpdates.due_date = null;
 
-    // Automatic timestamp logic
-    if (updates.status === 'In Progress') {
+    // Tactical Lifecycle Timestamp Logic
+    if (payload.status === 'in_progress') {
       finalUpdates.started_at = new Date().toISOString();
-    } else if (updates.status === 'Completed') {
+    } else if (payload.status === 'completed') {
       finalUpdates.completed_at = new Date().toISOString();
     }
 
-    const { data, error } = await supabase
-      .from('tasks')
-      .update(finalUpdates)
-      .eq('id', id)
-      .eq('user_id', session.user.id) // Ensure security
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
-  },
+    return super.update(id, finalUpdates);
+  }
 
   /**
-   * Delete a task
-   */
-  async deleteTask(id: string): Promise<void> {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user) throw new Error('User not authenticated');
-
-    const { error } = await supabase
-      .from('tasks')
-      .delete()
-      .eq('id', id)
-      .eq('user_id', session.user.id);
-
-    if (error) throw error;
-  },
-
-  /**
-   * Helper to update status directly (used in lists)
+   * Helper method for status transitions, aligning with the extended update logic.
    */
   async updateStatus(id: string, status: Status): Promise<PostgrestTask> {
-    return this.updateTask(id, { status });
+    return this.update(id, { status });
   }
-};
+}
+
+// Export a singleton instance for global system availability
+export const taskService = new TaskService();

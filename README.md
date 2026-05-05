@@ -1,54 +1,72 @@
-# TaskFire
+# TaskFire Strategic Stream
 
-TaskFire is a high-performance, real-time productivity dashboard and task management system built with React, Vite, and Supabase. It features an executive-grade interface designed for rapid situational awareness and precise operational control.
+TaskFire is a high-performance productivity application designed for strategic task management and real-time operational monitoring. It features a tactical dark-themed interface, secure Supabase authentication, and real-time data synchronization.
 
-## Tech Stack
+## 🚀 Tech Stack
 
-- **Frontend**: React 18+, Vite, TypeScript
-- **Styling**: Tailwind CSS, Lucide Icons, Framer Motion
-- **Backend/Auth**: Supabase (PostgreSQL, Auth, Realtime)
-- **Analytics**: Recharts
-- **Reporting**: jsPDF, jspdf-autotable
+- **Frontend:** React 19, TypeScript, Vite
+- **Styling:** Tailwind CSS (v4)
+- **Animations:** Motion (Framer Motion)
+- **Database/Auth:** Supabase (PostgreSQL + GoTrue)
+- **Realtime:** Supabase Realtime (Postgres Changes)
+- **Icons:** Lucide React
+- **Reporting:** jsPDF + autoTable
 
-## Key Features
+## 🛠️ Local Setup
 
-- **Executive Monitor**: Real-time status breakdown and resolution efficiency analytics.
-- **Strategic Stream**: User-specific CRUD operations with support for priorities, start dates, and deadlines.
-- **Security First**: Row-Level Security (RLS) ensures operators only access their assigned data.
-- **Reporting**: On-demand PDF generation of executive briefings for management review.
-- **Real-time Sync**: Instant UI updates across all active sessions using Supabase Realtime.
-
-## Local Setup
-
-1. **Clone the repository**
-2. **Install dependencies**:
+1. **Clone the repository.**
+2. **Install dependencies:**
    ```bash
    npm install
    ```
-3. **Configure Environment**:
-   Create a `.env` file (or use AI Studio Secrets) with the following:
+3. **Configure Environment Variables:**
+   Create a `.env` file in the root directory and add your Supabase credentials:
    ```env
-   VITE_SUPABASE_URL=your_supabase_api_url
+   VITE_SUPABASE_URL=your_supabase_project_url
    VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
    ```
-4. **Database Setup**:
-   Run the schema provided in `supabase_schema.sql` in your Supabase SQL Editor.
-5. **Start Dev Server**:
+4. **Launch the development server:**
    ```bash
    npm run dev
    ```
 
-## Database Schema
+## 🏗️ Database Schema
 
-- **auth.users**: Managed by Supabase Auth.
-- **public.users**: Profile data synced via triggers (id, email, full_name, role).
-- **public.tasks**: The core data store (id, user_id, title, status, priority, etc.).
+### `public.users` (Profile Metadata)
+| Field | Type | Description |
+|-------|------|-------------|
+| id | uuid (PK) | References auth.users.id |
+| email | text | User email address |
+| full_name | text | Display name |
+| role | text | 'operator' or 'director' (Default: 'operator') |
+| created_at | timestamp | Auto-generated timestamp |
 
-## Environment Variables
+### `public.tasks` (Operational Entities)
+| Field | Type | Description |
+|-------|------|-------------|
+| id | uuid (PK) | Primary Key |
+| user_id | uuid | FK to auth.users.id |
+| title | text | Task headline |
+| description | text | Detailed briefing |
+| status | text | 'Pending', 'In Progress', 'Completed' |
+| priority | text | 'Low', 'Medium', 'High' |
+| start_date | timestamp | Mission start time |
+| due_date | timestamp | Mission deadline |
+| started_at | timestamp | Actual start timestamp |
+| completed_at | timestamp | Actual completion timestamp |
+| created_at | timestamp | Auto-generated |
 
-- `VITE_SUPABASE_URL`: The Project URL from Supabase Project Settings > API.
-- `VITE_SUPABASE_ANON_KEY`: The `anon` `public` key from Supabase Project Settings > API.
-- `GEMINI_API_KEY`: Required for AI features (if enabled).
+## 📦 Deployment
 
----
-*TaskFire // Executive Productivity Stream*
+This application is ready for deployment to any static site hosting provider (Vercel, Netlify, Cloudflare Pages). Ensure that you set the environment variables in your deployment dashboard.
+
+The Vite build is optimized for production:
+```bash
+npm run build
+```
+
+## 🛡️ RLS (Row Level Security)
+
+Strict Row Level Security is enforced on all tables. 
+- **Users Table:** Users can only read/update their own profile.
+- **Tasks Table:** Users have full CRUD access to their own tasks (`user_id = auth.uid()`).

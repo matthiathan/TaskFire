@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { PostgrestTask, UserProfile } from '@/src/types';
+import { PostgrestTask, UserProfile, Priority } from '@/src/types';
 import { cn } from '@/src/lib/utils';
 import ReportGenerator from './ReportGenerator';
 import StatusDistribution from './StatusDistribution';
@@ -18,10 +18,10 @@ export default function Dashboard({ tasks, profile }: DashboardProps) {
   // Memoized strategic metrics
   const stats = useMemo(() => {
     const total = tasks.length;
-    const completedTasks = tasks.filter(t => t.status === 'Completed');
+    const completedTasks = tasks.filter(t => t.status === 'completed');
     const completed = completedTasks.length;
-    const inProgress = tasks.filter(t => t.status === 'In Progress').length;
-    const pending = tasks.filter(t => t.status === 'Pending').length;
+    const inProgress = tasks.filter(t => t.status === 'in_progress').length;
+    const pending = tasks.filter(t => t.status === 'pending').length;
 
     let totalHours = 0;
     let countWithTiming = 0;
@@ -49,9 +49,9 @@ export default function Dashboard({ tasks, profile }: DashboardProps) {
   ].filter(d => d.value > 0);
 
   const resolutionData = useMemo(() => {
-    const priorities = ['Low', 'Medium', 'High'];
+    const priorities: Priority[] = ['low', 'medium', 'high'];
     return priorities.map(p => {
-      const priorityTasks = tasks.filter(t => t.priority === p && t.status === 'Completed' && t.started_at && t.completed_at);
+      const priorityTasks = tasks.filter(t => t.priority === p && t.status === 'completed' && t.started_at && t.completed_at);
       let totalHours = 0;
       priorityTasks.forEach(t => {
         const start = new Date(t.started_at!).getTime();
@@ -59,7 +59,7 @@ export default function Dashboard({ tasks, profile }: DashboardProps) {
         totalHours += (end - start) / (1000 * 60 * 60);
       });
       const avg = priorityTasks.length > 0 ? (totalHours / priorityTasks.length).toFixed(1) : '0';
-      return { name: p, avg: parseFloat(avg), count: priorityTasks.length };
+      return { name: p.charAt(0).toUpperCase() + p.slice(1), avg: parseFloat(avg), count: priorityTasks.length };
     });
   }, [tasks]);
 
@@ -136,8 +136,8 @@ export default function Dashboard({ tasks, profile }: DashboardProps) {
                       <td className="px-6 py-4">
                         <span className={cn(
                           "px-2 py-0.5 border rounded-md text-[9px] font-black tracking-widest",
-                          task.priority === 'High' ? "bg-red-500/10 text-red-500 border-red-500/20" :
-                          task.priority === 'Medium' ? "bg-blue-500/10 text-blue-400 border-blue-500/20" :
+                          task.priority === 'high' ? "bg-red-500/10 text-red-500 border-red-500/20" :
+                          task.priority === 'medium' ? "bg-blue-500/10 text-blue-400 border-blue-500/20" :
                           "bg-slate-500/10 text-slate-400 border-slate-500/20"
                         )}>
                           {task.priority.toUpperCase()}
@@ -147,11 +147,11 @@ export default function Dashboard({ tasks, profile }: DashboardProps) {
                         <div className="flex items-center gap-2 text-xs font-bold">
                           <div className={cn(
                             "w-2 h-2 rounded-full",
-                            task.status === 'Completed' ? "bg-emerald-500" :
-                            task.status === 'In Progress' ? "bg-amber-500 animate-pulse" :
+                            task.status === 'completed' ? "bg-emerald-500" :
+                            task.status === 'in_progress' ? "bg-amber-500 animate-pulse" :
                             "bg-amber-500/30"
                           )}></div>
-                          <span className="text-slate-300">{task.status}</span>
+                          <span className="text-slate-300">{task.status === 'in_progress' ? 'In Progress' : task.status.charAt(0).toUpperCase() + task.status.slice(1)}</span>
                         </div>
                       </td>
                     </tr>

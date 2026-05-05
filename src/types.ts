@@ -1,5 +1,5 @@
-export type Priority = 'Low' | 'Medium' | 'High';
-export type Status = 'Pending' | 'In Progress' | 'Completed';
+export type Priority = 'low' | 'medium' | 'high';
+export type Status = 'pending' | 'in_progress' | 'completed';
 export type UserRole = 'employee' | 'director';
 
 export interface UserProfile {

@@ -65,7 +65,7 @@ export default function ReportGenerator({ tasks, stats }: ReportGeneratorProps) 
       doc.text('COMPLETED OPERATIONS STREAM', 20, (doc as any).lastAutoTable.finalY + 15);
 
       const completedTasks = tasks
-        .filter(t => t.status === 'Completed')
+        .filter(t => t.status === 'completed')
         .map(t => {
           let duration = '-';
           if (t.started_at && t.completed_at) {

@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { Clock, Calendar, Activity, CheckCircle2, Edit2, Trash2 } from 'lucide-react';
-import { cn, formatDate } from '@/src/lib/utils';
+import { Clock, Calendar, Activity, CheckCircle2, Edit2, Trash2, Loader2 } from 'lucide-react';
+import { cn, formatDate, formatEnum } from '@/src/lib/utils';
 import { PostgrestTask, Status } from '@/src/types';
 import { format } from 'date-fns';
 
@@ -10,7 +10,8 @@ interface TaskCardProps {
   idx: number;
   onUpdateStatus: (id: string, status: Status) => void;
   onEdit: (task: PostgrestTask) => void;
-  onDelete: (id: string) => void;
+  onDelete: (id: string) => Promise<void>;
+  key?: string | number;
 }
 
 /**
@@ -18,6 +19,22 @@ interface TaskCardProps {
  * It features responsive controls and real-time status indicators.
  */
 export default function TaskCard({ task, idx, onUpdateStatus, onEdit, onDelete }: TaskCardProps) {
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    if (!window.confirm('Are you sure you want to permanently delete this task?')) return;
+    
+    setIsDeleting(true);
+    try {
+      await onDelete(task.id);
+    } catch (err) {
+      // Error handled by parent toast or we can add one here if needed
+      console.error('[TaskCard] Strategic deletion failure:', err);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <motion.div
       layout
@@ -27,7 +44,7 @@ export default function TaskCard({ task, idx, onUpdateStatus, onEdit, onDelete }
       key={task.id}
       className={cn(
         "bg-[#0F0F0F] border border-white/10 rounded-2xl p-6 hover:border-[#FF4D00]/50 transition-all group relative overflow-hidden",
-        task.status === 'Completed' && "border-emerald-500/10"
+        task.status === 'completed' && "border-emerald-500/10"
       )}
     >
       <div className="flex flex-col sm:flex-row items-start justify-between gap-4 relative z-10 w-full">
@@ -35,22 +52,22 @@ export default function TaskCard({ task, idx, onUpdateStatus, onEdit, onDelete }
           <div className="flex items-center gap-3 mb-2 flex-wrap">
             <span className={cn(
               "text-[9px] font-black uppercase tracking-[0.2em] px-2 py-0.5 rounded border",
-              task.priority === 'High' ? "bg-red-500/20 text-red-500 border-red-500/30" :
-              task.priority === 'Medium' ? "bg-blue-500/20 text-blue-500 border-blue-500/30" :
+              task.priority === 'high' ? "bg-red-500/20 text-red-500 border-red-500/30" :
+              task.priority === 'medium' ? "bg-blue-500/20 text-blue-500 border-blue-500/30" :
               "bg-slate-500/20 text-slate-500 border-slate-500/30"
             )}>
-              {task.priority} Priority
+              {formatEnum(task.priority)} Priority
             </span>
             <span className={cn(
               "text-[9px] font-black uppercase tracking-[0.2em] px-2 py-0.5 rounded border",
-              task.status === 'In Progress' ? "bg-[#FF9900]/20 text-[#FF9900] border-[#FF9900]/30" :
-              task.status === 'Completed' ? "bg-emerald-500/20 text-emerald-500 border-emerald-500/30" :
+              task.status === 'in_progress' ? "bg-[#FF9900]/20 text-[#FF9900] border-[#FF9900]/30" :
+              task.status === 'completed' ? "bg-emerald-500/20 text-emerald-500 border-emerald-500/30" :
               "bg-white/5 text-slate-400 border-white/10"
             )}>
-              {task.status}
+              {formatEnum(task.status)}
             </span>
           </div>
-          <h4 className={cn("text-xl font-bold text-white truncate", task.status === 'Completed' && "opacity-50 line-through")}>
+          <h4 className={cn("text-xl font-bold text-white truncate", task.status === 'completed' && "opacity-50 line-through")}>
             {task.title}
           </h4>
           {task.description && (
@@ -78,18 +95,18 @@ export default function TaskCard({ task, idx, onUpdateStatus, onEdit, onDelete }
         </div>
 
         <div className="flex items-center gap-2 shrink-0 sm:opacity-0 group-hover:opacity-100 transition-opacity w-full sm:w-auto justify-end sm:justify-start">
-          {task.status === 'Pending' && (
+          {task.status === 'pending' && (
             <button 
-              onClick={() => onUpdateStatus(task.id, 'In Progress')}
+              onClick={() => onUpdateStatus(task.id, 'in_progress')}
               className="w-10 h-10 flex items-center justify-center bg-[#FF9900]/10 hover:bg-[#FF9900] text-[#FF9900] hover:text-white rounded-xl transition-all"
               title="Initiate Project"
             >
               <Clock className="w-5 h-5" />
             </button>
           )}
-          {task.status === 'In Progress' && (
+          {task.status === 'in_progress' && (
             <button 
-              onClick={() => onUpdateStatus(task.id, 'Completed')}
+              onClick={() => onUpdateStatus(task.id, 'completed')}
               className="w-10 h-10 flex items-center justify-center bg-emerald-500/10 hover:bg-emerald-500 text-emerald-500 hover:text-white rounded-xl transition-all"
               title="Terminate Project"
             >
@@ -104,11 +121,17 @@ export default function TaskCard({ task, idx, onUpdateStatus, onEdit, onDelete }
             <Edit2 className="w-5 h-5" />
           </button>
           <button 
-            onClick={() => onDelete(task.id)}
-            className="w-10 h-10 flex items-center justify-center bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white rounded-xl transition-all"
+            onClick={handleDelete}
+            disabled={isDeleting}
+            className={cn(
+              "w-10 h-10 flex items-center justify-center rounded-xl transition-all",
+              isDeleting 
+                ? "bg-red-500/5 text-red-500/50 cursor-not-allowed" 
+                : "bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white"
+            )}
             title="Erase Operation"
           >
-            <Trash2 className="w-5 h-5" />
+            {isDeleting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 className="w-5 h-5" />}
           </button>
         </div>
       </div>

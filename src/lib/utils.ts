@@ -16,20 +16,28 @@ export function formatDate(date: string | null) {
   });
 }
 
+export function formatEnum(val: string) {
+  if (!val) return '';
+  return val
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
 export function getStatusColor(status: string) {
   switch (status) {
-    case 'Pending': return 'text-amber-500 bg-amber-50 border-amber-200';
-    case 'In Progress': return 'text-blue-500 bg-blue-50 border-blue-200';
-    case 'Completed': return 'text-emerald-500 bg-emerald-50 border-emerald-200';
-    default: return 'text-slate-500 bg-slate-50 border-slate-200';
+    case 'pending': return 'text-amber-500 bg-amber-500/10 border-amber-500/20';
+    case 'in_progress': return 'text-blue-500 bg-blue-500/10 border-blue-500/20';
+    case 'completed': return 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20';
+    default: return 'text-slate-500 bg-slate-500/10 border-slate-500/20';
   }
 }
 
 export function getPriorityColor(priority: string) {
   switch (priority) {
-    case 'Low': return 'text-slate-500 bg-slate-50 border-slate-200';
-    case 'Medium': return 'text-indigo-500 bg-indigo-50 border-indigo-200';
-    case 'High': return 'text-rose-500 bg-rose-50 border-rose-200';
-    default: return 'text-slate-500 bg-slate-50 border-slate-200';
+    case 'low': return 'text-slate-500 bg-slate-500/10 border-slate-500/20';
+    case 'medium': return 'text-indigo-500 bg-indigo-500/10 border-indigo-500/20';
+    case 'high': return 'text-rose-500 bg-rose-500/10 border-rose-500/20';
+    default: return 'text-slate-500 bg-slate-500/10 border-slate-500/20';
   }
 }

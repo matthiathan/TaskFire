@@ -9,20 +9,11 @@ const getSupabase = (): SupabaseClient => {
   const key = (import.meta as any).env.VITE_SUPABASE_ANON_KEY;
 
   if (!url || !url.startsWith('http')) {
-    const isDbUrl = url && url.startsWith('postgresql://');
-    const errorMsg = !url 
-      ? 'VITE_SUPABASE_URL is missing.' 
-      : isDbUrl 
-        ? 'VITE_SUPABASE_URL is set to a Database URL, but needs the API URL (HTTPS).' 
-        : 'VITE_SUPABASE_URL must be a valid URL starting with https://';
-      
-    throw new Error(`${errorMsg} Please use the "Project URL" from your Supabase API settings.`);
+    return null; // Return null instead of throwing, let the UI handle the missing client
   }
 
   if (!key || key === 'your-anon-key') {
-    throw new Error(
-      'VITE_SUPABASE_ANON_KEY is missing or using placeholder value. Please add your real Supabase Anon Key from your project settings.'
-    );
+    return null;
   }
 
   supabaseClient = createClient(url, key);
@@ -33,6 +24,11 @@ const getSupabase = (): SupabaseClient => {
 export const supabase = new Proxy({} as any as SupabaseClient, {
   get(_, prop: string) {
     const client = getSupabase();
+    if (!client) {
+      // If we don't have a client, return a dummy object or throw a controlled error
+      // that we can catch in the UI.
+      throw new Error('Supabase configuration missing or invalid.');
+    }
     const value = (client as any)[prop];
     if (typeof value === 'function') {
       return value.bind(client);

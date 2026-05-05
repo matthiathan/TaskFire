@@ -2,6 +2,7 @@ import { cn } from '@/src/lib/utils';
 
 interface SkeletonProps {
   className?: string;
+  key?: string | number;
 }
 
 export function Skeleton({ className }: SkeletonProps) {

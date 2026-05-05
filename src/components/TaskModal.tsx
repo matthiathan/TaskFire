@@ -20,6 +20,7 @@ interface TaskModalProps {
   dueDate: string;
   setDueDate: (val: string) => void;
   loading: boolean;
+  error?: string | null;
 }
 
 /**
@@ -41,7 +42,8 @@ export default function TaskModal({
   setStartDate,
   dueDate,
   setDueDate,
-  loading
+  loading,
+  error
 }: TaskModalProps) {
   return (
     <AnimatePresence>
@@ -74,6 +76,11 @@ export default function TaskModal({
             </div>
 
             <form onSubmit={onSubmit} className="p-10 space-y-6">
+              {error && (
+                <div className="p-4 bg-red-500/10 text-red-500 border border-red-500/20 rounded-2xl text-[10px] font-black uppercase tracking-widest animate-pulse">
+                  System Alert: {error}
+                </div>
+              )}
               <div>
                 <label className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2">Subject Header</label>
                 <input
@@ -97,7 +104,7 @@ export default function TaskModal({
               <div>
                 <label className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-3">Criticality Level</label>
                 <div className="grid grid-cols-3 gap-3">
-                  {(['Low', 'Medium', 'High'] as Priority[]).map((p) => (
+                  {(['low', 'medium', 'high'] as Priority[]).map((p) => (
                     <button
                       key={p}
                       type="button"

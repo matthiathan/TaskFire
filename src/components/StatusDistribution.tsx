@@ -10,8 +10,8 @@ export default function StatusDistribution({ data, completionRate }: StatusDistr
   return (
     <div className="flex-1 bg-white/5 border border-white/10 rounded-3xl p-6 shadow-xl relative overflow-hidden group">
       <h3 className="text-sm font-bold text-white mb-8 uppercase tracking-wider relative z-10">Status Distribution</h3>
-      <div className="h-[250px] relative z-10">
-        <ResponsiveContainer width="100%" height="100%">
+      <div className="h-[250px] w-full min-h-[250px] relative z-10">
+        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
           <PieChart>
             <Pie
               data={data}

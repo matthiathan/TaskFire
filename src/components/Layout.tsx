@@ -12,13 +12,16 @@ import {
 import { cn } from '@/src/lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 
-import { UserProfile } from '../types';
+import { UserProfile, PostgrestTask } from '../types';
+import { NotificationCenter } from './NotificationCenter';
+import { Toaster, toast } from 'sonner';
 
 interface SidebarItemProps {
   icon: any;
   label: string;
   active: boolean;
   onClick: () => void;
+  key?: string | number;
 }
 
 /**
@@ -46,18 +49,25 @@ interface LayoutProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   profile: UserProfile | null;
+  tasks: PostgrestTask[];
 }
 
 /**
  * Layout serves as the main application shell, providing responsive navigation
  * and identity management for TaskFire operators.
  */
-export default function Layout({ children, activeTab, setActiveTab, profile }: LayoutProps) {
+export default function Layout({ children, activeTab, setActiveTab, profile, tasks }: LayoutProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const onNotificationClick = (task: PostgrestTask) => {
+    setActiveTab('tasks');
+    // We could potentially scroll to or highlight the task here
+  };
 
   // Securely terminates the session
   const handleLogout = async () => {
     await supabase.auth.signOut();
+    window.location.reload(); // Hard reset to clear reactive state
   };
 
   const navItems = [
@@ -72,6 +82,19 @@ export default function Layout({ children, activeTab, setActiveTab, profile }: L
 
   return (
     <div className="min-h-screen bg-[#0A0A0A] text-slate-200 flex font-sans selection:bg-[#FF4D00]/30 selection:text-white">
+      <Toaster 
+        theme="dark" 
+        position="top-right" 
+        toastOptions={{
+          style: {
+            background: '#0F0F0F',
+            border: '1px solid rgba(255, 77, 0, 0.2)',
+            color: '#fff',
+            borderRadius: '1rem',
+            fontFamily: 'Inter, sans-serif'
+          },
+        }}
+      />
       {/* Desktop Sidebar - Persistent on large screens */}
       <aside className="hidden lg:flex w-64 bg-[#0F0F0F] border-r border-white/10 flex-col p-6 sticky top-0 h-screen overflow-y-auto">
         <div className="flex items-center gap-3 mb-12">
@@ -125,13 +148,16 @@ export default function Layout({ children, activeTab, setActiveTab, profile }: L
           </div>
           <span className="text-lg font-black text-white uppercase italic tracking-tighter">TaskFire</span>
         </div>
-        <button 
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="p-2 bg-white/5 rounded-lg border border-white/10 text-white active:scale-95 transition-all outline-none"
-            aria-label="Toggle Menu"
-        >
-          {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-        </button>
+        <div className="flex items-center gap-2">
+          <NotificationCenter tasks={tasks} onTaskClick={onNotificationClick} />
+          <button 
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="p-2 bg-white/5 rounded-lg border border-white/10 text-white active:scale-95 transition-all outline-none"
+              aria-label="Toggle Menu"
+          >
+            {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
+        </div>
       </div>
 
       {/* Mobile Navigation Overlay */}
@@ -206,15 +232,18 @@ export default function Layout({ children, activeTab, setActiveTab, profile }: L
             </div>
           </div>
           
-          <div className="flex items-center gap-4 bg-white/[0.03] hover:bg-white/[0.05] border border-white/10 rounded-2xl py-2 pl-6 pr-3 shadow-lg transition-all backdrop-blur-md group cursor-default">
-            <div className="text-right">
-              <p className="text-xs font-black text-white group-hover:text-[#FF4D00] transition-colors uppercase tracking-tight">{profile?.full_name || 'Staff'}</p>
-              <p className="text-[9px] text-slate-600 uppercase font-black tracking-[0.1em] mt-0.5">
-                {profile?.role === 'director' ? 'Executive Lead' : 'Field Technician'}
-              </p>
-            </div>
-            <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center border border-white/10 shadow-inner group-hover:border-[#FF4D00]/50 transition-colors">
-              <span className="text-xs font-black text-[#FF4D00]">{userInitials}</span>
+          <div className="flex items-center gap-4">
+            <NotificationCenter tasks={tasks} onTaskClick={onNotificationClick} />
+            <div className="flex items-center gap-4 bg-white/[0.03] hover:bg-white/[0.05] border border-white/10 rounded-2xl py-2 pl-6 pr-3 shadow-lg transition-all backdrop-blur-md group cursor-default">
+              <div className="text-right">
+                <p className="text-xs font-black text-white group-hover:text-[#FF4D00] transition-colors uppercase tracking-tight">{profile?.full_name || 'Staff'}</p>
+                <p className="text-[9px] text-slate-600 uppercase font-black tracking-[0.1em] mt-0.5">
+                  {profile?.role === 'director' ? 'Executive Lead' : 'Field Technician'}
+                </p>
+              </div>
+              <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center border border-white/10 shadow-inner group-hover:border-[#FF4D00]/50 transition-colors">
+                <span className="text-xs font-black text-[#FF4D00]">{userInitials}</span>
+              </div>
             </div>
           </div>
         </header>
